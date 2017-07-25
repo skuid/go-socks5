@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -13,6 +14,10 @@ import (
 const (
 	socks5Version = uint8(5)
 )
+
+type Logger interface {
+	Printf(string, ...interface{})
+}
 
 // Config is used to setup and configure a Server
 type Config struct {
@@ -44,7 +49,7 @@ type Config struct {
 
 	// Logger can be used to provide a custom log target.
 	// Defaults to stdout.
-	Logger *log.Logger
+	Logger Logger
 
 	// Optional function for dialing out
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -112,6 +117,8 @@ func (s *Server) Serve(l net.Listener) error {
 		if err != nil {
 			return err
 		}
+		promRequestCounter.Inc()
+
 		go s.ServeConn(conn)
 	}
 	return nil
@@ -120,12 +127,17 @@ func (s *Server) Serve(l net.Listener) error {
 // ServeConn is used to serve a single connection.
 func (s *Server) ServeConn(conn net.Conn) error {
 	defer conn.Close()
+	now := time.Now()
+	defer func() {
+		instrumentRequestDuration(now)
+	}()
 	bufConn := bufio.NewReader(conn)
 
 	// Read the version byte
 	version := []byte{0}
 	if _, err := bufConn.Read(version); err != nil {
 		s.config.Logger.Printf("[ERR] socks: Failed to get version byte: %v", err)
+		promRequestFailed.Inc()
 		return err
 	}
 
@@ -133,6 +145,7 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	if version[0] != socks5Version {
 		err := fmt.Errorf("Unsupported SOCKS version: %v", version)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
+		promRequestFailed.Inc()
 		return err
 	}
 
@@ -141,11 +154,13 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	if err != nil {
 		err = fmt.Errorf("Failed to authenticate: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
+		promRequestFailed.Inc()
 		return err
 	}
 
 	request, err := NewRequest(bufConn)
 	if err != nil {
+		promRequestFailed.Inc()
 		if err == unrecognizedAddrType {
 			if err := sendReply(conn, addrTypeNotSupported, nil); err != nil {
 				return fmt.Errorf("Failed to send reply: %v", err)
@@ -162,8 +177,9 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	if err := s.handleRequest(request, conn); err != nil {
 		err = fmt.Errorf("Failed to handle request: %v", err)
 		s.config.Logger.Printf("[ERR] socks: %v", err)
+		promRequestFailed.Inc()
 		return err
 	}
-
+	promRequestSuccess.Inc()
 	return nil
 }
