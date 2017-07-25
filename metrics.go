@@ -13,12 +13,12 @@ var (
 	})
 
 	promRequestSuccess = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "num_requests_failed",
+		Name: "num_requests_success",
 		Help: "Number of requests that failed to be handled properly",
 	})
 
 	promRequestFailed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "num_requests_success",
+		Name: "num_requests_failed",
 		Help: "Number of requests that were successfully fulfilled",
 	})
 
