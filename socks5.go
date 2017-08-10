@@ -128,9 +128,6 @@ func (s *Server) Serve(l net.Listener) error {
 func (s *Server) ServeConn(conn net.Conn) error {
 	defer conn.Close()
 	now := time.Now()
-	defer func() {
-		instrumentRequestDuration(now)
-	}()
 	bufConn := bufio.NewReader(conn)
 
 	// Read the version byte
@@ -159,6 +156,11 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	}
 
 	request, err := NewRequest(bufConn)
+
+	defer func() {
+		instrumentRequestDuration(now, string(request.DestAddr.IP))
+	}()
+
 	if err != nil {
 		promRequestFailed.Inc()
 		if err == unrecognizedAddrType {

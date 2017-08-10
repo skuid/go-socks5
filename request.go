@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -157,6 +158,11 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 
 // handleConnect is used to handle a connect command
 func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) error {
+	now := time.Now()
+	defer func() {
+		instrumentRequestSetupDuration(now, string(req.DestAddr.IP))
+	}()
+
 	// Check if this is allowed
 	if ctx_, ok := s.config.Rules.Allow(ctx, req); !ok {
 		if err := sendReply(conn, ruleFailure, nil); err != nil {
