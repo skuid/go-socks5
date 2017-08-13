@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -158,7 +159,9 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	request, err := NewRequest(bufConn)
 
 	defer func() {
-		instrumentRequestDuration(now, string(request.DestAddr.IP))
+		addr := conn.RemoteAddr().String()
+		idx := strings.LastIndex(addr, ":")
+		instrumentRequestDuration(now, addr[0:idx])
 	}()
 
 	if err != nil {
